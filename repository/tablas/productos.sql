@@ -1,0 +1,9 @@
+CREATE TABLE Productos (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    nombre VARCHAR(100) NOT NULL,
+    descripcion_tecnica VARCHAR(254) NOT NULL
+);
+
+ALTER TABLE Productos
+    MODIFY COLUMN nombre VARCHAR(100) NOT NULL,
+    MODIFY COLUMN descripcion_tecnica VARCHAR(254) NOT NULL;
