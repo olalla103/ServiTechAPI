@@ -1,17 +1,112 @@
 from fastapi import APIRouter, HTTPException
-from typing import List
-from models.usuarios import UsuarioDB
-from repository.handler_usuario import get_all_usuarios, get_usuario_by_id
+from typing import List, Optional
+from models.usuarios import UsuarioDB, UsuarioCreate, UsuarioUpdate
+from repository.handler_usuario import (
+    get_all_usuarios,
+    get_usuario_by_id,
+    insertar_usuario,
+    get_usuario_by_nombre_apellidos,
+    verificar_credenciales,
+    cambiar_telefono,
+    recuperar_emails,
+    recuperar_telefonos,
+    recuperar_especialidad,
+    eliminar_usuario,
+    get_usuarios_ordenados_por_columna, actualizar_usuario,
+)
 
 router = APIRouter()
 
-@router.get("/", response_model=List[UsuarioDB])
-def listar_usuarios():
-    return get_all_usuarios()
+# --- CONSULTAS Y BÚSQUEDAS ---
 
+# Buscar usuario por nombre y apellidos
+@router.get("/buscar", response_model=UsuarioDB)
+def buscar_usuario(nombre: str, apellido1: str, apellido2: str):
+    usuario = get_usuario_by_nombre_apellidos(nombre, apellido1, apellido2)
+    if not usuario:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    return usuario
+
+# Obtener usuario por id
 @router.get("/{usuario_id}", response_model=UsuarioDB)
 def obtener_usuario(usuario_id: int):
     usuario = get_usuario_by_id(usuario_id)
     if not usuario:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
     return usuario
+
+# Obtener todos los usuarios
+@router.get("/", response_model=List[UsuarioDB])
+def listar_usuarios():
+    return get_all_usuarios()
+
+# Obtener usuarios ordenados por columna
+@router.get("/ordenados", response_model=List[UsuarioDB])
+def listar_usuarios_ordenados(
+    columna: str = "nombre",
+    ascendente: bool = True,
+    skip: int = 0,
+    limit: int = 100
+):
+    return get_usuarios_ordenados_por_columna(
+        columna=columna,
+        ascendente=ascendente,
+        skip=skip,
+        limit=limit
+    )
+
+# Recuperar emails de todos los usuarios
+@router.get("/emails", response_model=List[str])
+def endpoint_recuperar_emails():
+    return recuperar_emails()
+
+# Recuperar teléfonos de todos los usuarios
+@router.get("/telefonos", response_model=List[str])
+def endpoint_recuperar_telefonos():
+    return recuperar_telefonos()
+
+# Recuperar especialidad de un usuario
+@router.get("/{usuario_id}/especialidad", response_model=Optional[str])
+def endpoint_recuperar_especialidad(usuario_id: int):
+    return recuperar_especialidad(usuario_id)
+
+# --- CREACIÓN, EDICIÓN Y VERIFICACIÓN ---
+
+# Insertar un usuario
+@router.post("/", response_model=UsuarioDB)
+def crear_usuario(datos: UsuarioCreate):
+    nueva_id = insertar_usuario(datos.model_dump())
+    if not nueva_id:
+        raise HTTPException(status_code=400, detail="No se pudo crear el usuario")
+    return get_usuario_by_id(nueva_id)
+
+# Cambiar teléfono del usuario
+@router.patch("/{usuario_id}")
+def actualizar_usuario_endpoint(usuario_id: int, datos: UsuarioUpdate):
+    campos = datos.model_dump(exclude_unset=True)
+    ok = actualizar_usuario(usuario_id, campos)
+    if not ok:
+        raise HTTPException(status_code=400, detail="No se pudo actualizar el usuario")
+    return {"ok": True}
+
+
+# Verificar credenciales (id y número de seguridad social)
+@router.post("/verificar")
+def endpoint_verificar_credenciales(id_usuario: int, numero_seguridad_social: str):
+    ok = verificar_credenciales(id_usuario, numero_seguridad_social)
+    if not ok:
+        raise HTTPException(status_code=400, detail="Credenciales incorrectas")
+    return {"ok": True}
+
+# --- ELIMINACIÓN ---
+
+# Eliminar usuario
+@router.delete("/{usuario_id}", response_model=UsuarioDB)
+def eliminar_usuario_endpoint(usuario_id: int):
+    usuario = get_usuario_by_id(usuario_id)
+    if not usuario:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    ok = eliminar_usuario(usuario_id)
+    if not ok:
+        raise HTTPException(status_code=400, detail="No se pudo eliminar el usuario")
+    return usuario  # Devuelves el usuario eliminado (antes de borrarlo)

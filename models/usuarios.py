@@ -58,6 +58,19 @@ class UsuarioBase(BaseModel):
 class UsuarioCreate(UsuarioBase):
     pass
 
+class UsuarioUpdate(BaseModel):
+    nombre: Optional[str] = None
+    apellido1: Optional[str] = None
+    apellido2: Optional[str] = None
+    email: Optional[EmailStr] = None
+    contraseña: Optional[str] = None
+    telefono: Optional[str] = None
+    fecha_nacimiento: Optional[date] = None
+    especialidad: Optional[str] = None
+    numero_seguridad_social: Optional[str] = None
+    admin_empresa: Optional[bool] = None
+    empresa_id: Optional[str] = None
+
 class UsuarioDB(UsuarioBase):
     id: int
 

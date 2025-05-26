@@ -40,6 +40,17 @@ class FacturaBase(BaseModel):
 class FacturaCreate(FacturaBase):
     pass
 
+class FacturaUpdate(BaseModel):
+    fecha_emision: Optional[datetime] = None
+    tiempo_total: Optional[float] = None
+    cantidad_total: Optional[float] = None
+    cantidad_adicional: Optional[float] = None
+    IVA: Optional[float] = None
+    observaciones: Optional[str] = None
+    tecnico_id: Optional[int] = None
+    cliente_id: Optional[int] = None
+    incidencia_id: Optional[int] = None
+
 class FacturaDB(FacturaBase):
     numero_factura: int
 

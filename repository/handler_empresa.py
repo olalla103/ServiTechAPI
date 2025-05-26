@@ -1,6 +1,6 @@
 import pymysql
 
-from models.empresa import EmpresaDB
+from models.empresas import EmpresaDB
 from repository.conexion import get_cursor
 
 def insertar_empresa(empresa):
@@ -61,3 +61,50 @@ def get_empresa_by_nombre(nombre_fiscal: str):
     except pymysql.MySQLError as e:
         print(f"Error al recuperar empresa por nombre: {e}")
         return None
+
+def actualizar_empresa(cif: str, campos: dict):
+    if not campos:
+        return False
+    try:
+        with get_cursor() as cursor:
+            set_clause = ", ".join([f"{k} = %s" for k in campos])
+            valores = list(campos.values()) + [cif]
+            sql = f"UPDATE empresas SET {set_clause} WHERE cif = %s"
+            cursor.execute(sql, valores)
+            return cursor.rowcount > 0
+    except pymysql.MySQLError as e:
+        print(f"Error al actualizar empresa: {e}")
+        return False
+
+def eliminar_empresa(cif: str):
+    try:
+        with get_cursor() as cursor:
+            sql = "DELETE FROM empresas WHERE cif = %s"
+            cursor.execute(sql, (cif,))
+            return cursor.rowcount > 0
+    except pymysql.MySQLError as e:
+        print(f"Error al eliminar empresa: {e}")
+        return False
+
+def get_empresas_by_ciudad(ciudad: str):
+    try:
+        with get_cursor() as cursor:
+            sql = "SELECT * FROM empresas WHERE ciudad = %s"
+            cursor.execute(sql, (ciudad,))
+            empresas = cursor.fetchall()
+            return [EmpresaDB(**empresa) for empresa in empresas]
+    except pymysql.MySQLError as e:
+        print(f"Error al recuperar empresas por ciudad: {e}")
+        return []
+
+def get_empresas_by_provincia(provincia: str):
+    try:
+        with get_cursor() as cursor:
+            sql = "SELECT * FROM empresas WHERE provincia = %s"
+            cursor.execute(sql, (provincia,))
+            empresas = cursor.fetchall()
+            return [EmpresaDB(**empresa) for empresa in empresas]
+    except pymysql.MySQLError as e:
+        print(f"Error al recuperar empresas por provincia: {e}")
+        return []
+

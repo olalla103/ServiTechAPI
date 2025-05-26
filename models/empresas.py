@@ -1,4 +1,6 @@
-# models/empresa.py
+# models/empresas.py
+from typing import Optional
+
 from pydantic import BaseModel, field_validator
 
 
@@ -18,6 +20,14 @@ class EmpresaBase(BaseModel):
            raise ValueError('El código postal debe tener 5 cifras y ser positivo')
        return v
 
+
+class EmpresaUpdate(BaseModel):
+    nombre_fiscal: Optional[str] = None
+    calle_y_numero: Optional[str] = None
+    codigo_postal: Optional[int] = None
+    ciudad: Optional[str] = None
+    provincia: Optional[str] = None
+    correo_electronico: Optional[str] = None
 
 class EmpresaCreate(EmpresaBase):
     pass

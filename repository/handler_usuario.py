@@ -11,14 +11,16 @@ def insertar_usuario(usuario):
         with get_cursor() as cursor:
             sql = """
                 INSERT INTO usuarios 
-                (nombre, apellido1, apellido2, telefono, fecha_nacimiento, especialidad,
+                (nombre, apellido1, apellido2, email, contraseña, telefono, fecha_nacimiento, especialidad,
                  numero_seguridad_social, admin_empresa, empresa_id)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """
             valores = (
                 usuario["nombre"],
                 usuario["apellido1"],
                 usuario.get("apellido2"),
+                usuario["email"],
+                usuario["contraseña"],
                 usuario.get("telefono"),
                 usuario.get("fecha_nacimiento"),
                 usuario.get("especialidad"),
@@ -31,6 +33,7 @@ def insertar_usuario(usuario):
     except pymysql.MySQLError as e:
         print(f"Error al insertar usuario: {e}")
         return None
+
 
 def get_all_usuarios():
     try:
@@ -147,3 +150,106 @@ def recuperar_especialidad(id_usuario):
     except pymysql.MySQLError as e:
         print(f"Error al recuperar especialidad: {e}")
         return None
+
+def eliminar_usuario(usuario_id: int):
+    try:
+        with get_cursor() as cursor:
+            sql = "DELETE FROM usuarios WHERE id = %s"
+            cursor.execute(sql, (usuario_id,))
+            return cursor.rowcount > 0
+    except pymysql.MySQLError as e:
+        print(f"Error al eliminar usuario: {e}")
+        return False
+
+def get_usuarios_by_empresa(empresa_id: str):
+    try:
+        with get_cursor() as cursor:
+            sql = "SELECT * FROM usuarios WHERE empresa_id = %s"
+            cursor.execute(sql, (empresa_id,))
+            usuarios = cursor.fetchall()
+            return [UsuarioDB(**usuario) for usuario in usuarios]
+    except pymysql.MySQLError as e:
+        print(f"Error al recuperar usuarios por empresa: {e}")
+        return []
+
+def get_usuario_by_email(email: str):
+    try:
+        with get_cursor() as cursor:
+            sql = "SELECT * FROM usuarios WHERE email = %s"
+            cursor.execute(sql, (email,))
+            usuario = cursor.fetchone()
+            return UsuarioDB(**usuario) if usuario else None
+    except pymysql.MySQLError as e:
+        print(f"Error al recuperar usuario por email: {e}")
+        return None
+
+def get_usuarios_ordenados_por_columna(columna: str = "nombre", ascendente: bool = True, skip: int = 0, limit: int = 100):
+    # Definir el mapeo de nombres "visibles" a nombres reales en la base de datos
+    columnas_validas = {
+        "usuario": "email",
+        "nombre": "nombre",
+        "apellidos": "apellido1",  # Si quieres, también puedes concatenar apellido1 y apellido2
+        "rol": "admin_empresa",    # Cambia si tienes un campo 'rol' real
+        "activo": "activo",
+        "int_ext": "interno_externo"  # Cambia si el campo se llama diferente
+    }
+    # Si la columna no es válida, usar por defecto "nombre"
+    columna_bd = columnas_validas.get(columna, "nombre")
+    orden = "ASC" if ascendente else "DESC"
+
+    try:
+        with get_cursor() as cursor:
+            sql = f"SELECT * FROM usuarios ORDER BY {columna_bd} {orden} LIMIT %s OFFSET %s"
+            cursor.execute(sql, (limit, skip))
+            usuarios = cursor.fetchall()
+            return [UsuarioDB(**usuario) for usuario in usuarios]
+    except pymysql.MySQLError as e:
+        print(f"Error al recuperar usuarios: {e}")
+        return []
+
+
+def actualizar_usuario(usuario_id: int, campos: dict):
+    if not campos:
+        return False  # Nada que actualizar
+
+    try:
+        with get_cursor() as cursor:
+            set_clause = ", ".join(f"{k} = %s" for k in campos)
+            valores = list(campos.values())
+            valores.append(usuario_id)
+            sql = f"UPDATE usuarios SET {set_clause} WHERE id = %s"
+            cursor.execute(sql, valores)
+            return cursor.rowcount > 0
+    except pymysql.MySQLError as e:
+        print(f"Error al actualizar usuario: {e}")
+        return False
+
+def contar_incidencias_en_curso(cliente_id: int):
+    try:
+        with get_cursor() as cursor:
+            sql = """
+                SELECT COUNT(*) AS total
+                FROM incidencias
+                WHERE cliente_id = %s AND estado = 'En Curso'
+            """
+            cursor.execute(sql, (cliente_id,))
+            row = cursor.fetchone()
+            return row["total"] if row else 0
+    except pymysql.MySQLError as e:
+        print(f"Error al contar incidencias en curso: {e}")
+        return 0
+
+def contar_incidencias_totales(cliente_id: int):
+    try:
+        with get_cursor() as cursor:
+            sql = """
+                SELECT COUNT(*) AS total
+                FROM incidencias
+                WHERE cliente_id = %s
+            """
+            cursor.execute(sql, (cliente_id,))
+            row = cursor.fetchone()
+            return row["total"] if row else 0
+    except pymysql.MySQLError as e:
+        print(f"Error al contar incidencias totales: {e}")
+        return 0
