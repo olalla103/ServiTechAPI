@@ -1,13 +1,12 @@
 from fastapi import APIRouter, HTTPException
 from typing import List, Optional
-from models.usuarios import UsuarioDB, UsuarioCreate, UsuarioUpdate
+from models.usuarios import UsuarioDB, UsuarioCreate, UsuarioUpdate, CredencialesLogin
 from repository.handler_usuario import (
     get_all_usuarios,
     get_usuario_by_id,
     insertar_usuario,
     get_usuario_by_nombre_apellidos,
     verificar_credenciales,
-    cambiar_telefono,
     recuperar_emails,
     recuperar_telefonos,
     recuperar_especialidad,
@@ -91,12 +90,14 @@ def actualizar_usuario_endpoint(usuario_id: int, datos: UsuarioUpdate):
 
 
 # Verificar credenciales (id y número de seguridad social)
+
 @router.post("/verificar")
-def endpoint_verificar_credenciales(id_usuario: int, numero_seguridad_social: str):
-    ok = verificar_credenciales(id_usuario, numero_seguridad_social)
+def endpoint_verificar_credenciales(datos: CredencialesLogin):
+    ok = verificar_credenciales(datos.email, datos.contraseña)
     if not ok:
         raise HTTPException(status_code=400, detail="Credenciales incorrectas")
     return {"ok": True}
+
 
 # --- ELIMINACIÓN ---
 

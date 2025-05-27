@@ -71,26 +71,27 @@ def get_usuario_by_nombre_apellidos(nombre: str, apellido1: str, apellido2: str)
         print(f"Error al recuperar usuario por nombre y apellidos: {e}")
         return None
 
-def verificar_credenciales(id_usuario, numero_seguridad_social):
+def verificar_credenciales(email, contraseña):
     """
-    Verifica si el usuario con ese id tiene el número de seguridad social dado.
+    Verifica si existe un usuario con ese email y contraseña.
     """
     try:
         with get_cursor() as cursor:
-            sql = "SELECT numero_seguridad_social FROM usuarios WHERE id = %s"
-            cursor.execute(sql, (id_usuario,))
+            sql = "SELECT contraseña FROM usuarios WHERE email = %s"
+            cursor.execute(sql, (email,))
             usuario = cursor.fetchone()
             if usuario is None:
                 print("Usuario no encontrado.")
                 return False
-            if usuario["numero_seguridad_social"] == numero_seguridad_social:
+            if usuario["contraseña"] == contraseña:
                 return True
             else:
-                print("Número de seguridad social incorrecto.")
+                print("Contraseña incorrecta.")
                 return False
     except pymysql.MySQLError as e:
         print(f"Error al verificar credenciales: {e}")
         return False
+
 
 def cambiar_telefono(id_usuario, nuevo_telefono):
     """

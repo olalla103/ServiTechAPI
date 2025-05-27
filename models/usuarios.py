@@ -71,6 +71,10 @@ class UsuarioUpdate(BaseModel):
     admin_empresa: Optional[bool] = None
     empresa_id: Optional[str] = None
 
+class CredencialesLogin(BaseModel):
+    email: str
+    contraseña: str
+
 class UsuarioDB(UsuarioBase):
     id: int
 
