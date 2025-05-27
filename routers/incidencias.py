@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Query
 from typing import List, Any
-from models.incidencias import IncidenciaDB, IncidenciaUpdate, PausaIncidencia
+from models.incidencias import IncidenciaDB,IncidenciaCreate, IncidenciaUpdate, PausaIncidencia
 from repository.handler_incidencia import (
     get_all_incidencias,
     get_incidencia_by_id,
@@ -17,8 +17,6 @@ router = APIRouter()
 @router.get("/", response_model=List[IncidenciaDB])
 def listar_incidencias():
     return get_all_incidencias()
-
-from models.incidencias import IncidenciaCreate
 
 @router.post("/", response_model=IncidenciaDB)
 def crear_incidencia(datos: IncidenciaCreate):

@@ -42,6 +42,7 @@ def buscar_empresa_por_nombre(nombre_fiscal: str):
 # ==============================
 
 # Crear una nueva empresa
+@router.post("", response_model=EmpresaDB)
 @router.post("/", response_model=EmpresaDB)
 def crear_empresa(datos: EmpresaCreate):
     nueva_cif = insertar_empresa(datos.model_dump())

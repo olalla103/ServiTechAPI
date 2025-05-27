@@ -72,6 +72,7 @@ def endpoint_recuperar_especialidad(usuario_id: int):
 # --- CREACIÓN, EDICIÓN Y VERIFICACIÓN ---
 
 # Insertar un usuario
+@router.post("", response_model=UsuarioDB)
 @router.post("/", response_model=UsuarioDB)
 def crear_usuario(datos: UsuarioCreate):
     nueva_id = insertar_usuario(datos.model_dump())
