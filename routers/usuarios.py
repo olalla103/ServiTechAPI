@@ -1,18 +1,26 @@
 from fastapi import APIRouter, HTTPException
 from typing import List, Optional
-from models.usuarios import UsuarioDB, UsuarioCreate, UsuarioUpdate, CredencialesLogin
+from models.usuarios import UsuarioDB, UsuarioCreate, UsuarioUpdate, TokenResponse
 from repository.handler_usuario import (
     get_all_usuarios,
     get_usuario_by_id,
     insertar_usuario,
     get_usuario_by_nombre_apellidos,
-    verificar_credenciales,
     recuperar_emails,
     recuperar_telefonos,
     recuperar_especialidad,
     eliminar_usuario,
-    get_usuarios_ordenados_por_columna, actualizar_usuario,
+    get_usuarios_ordenados_por_columna,
+    actualizar_usuario,
+    get_usuario_by_email,
 )
+from pydantic import BaseModel
+from jose import jwt
+from datetime import datetime, timedelta
+
+SECRET_KEY = "SUPERSECRETO_CAMBIALO123"
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 1 semana
 
 router = APIRouter()
 
@@ -90,14 +98,57 @@ def actualizar_usuario_endpoint(usuario_id: int, datos: UsuarioUpdate):
     return {"ok": True}
 
 
-# Verificar credenciales (id y número de seguridad social)
+# Clave secreta fuerte (pon algo largo y seguro en producción)
+SECRET_KEY = "SUPERSECRETO_CAMBIALO123"
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 1 semana
+
+# Modelos de login
+class LoginRequest(BaseModel):
+    email: str
+    contraseña: str
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+
+
+def verificar_usuario_y_contraseña(email, contraseña):
+    print("Llamando a get_usuario_by_email con:", email)
+    usuario = get_usuario_by_email(email)
+    print("Resultado usuario:", usuario)
+    if not usuario:
+        print("Usuario no encontrado")
+        return False
+    print("Contraseña en BBDD:", usuario.contraseña)
+    if usuario.contraseña != contraseña:
+        print("Contraseña incorrecta")
+        return False
+    print("Login correcto")
+    return usuario
+
+
+
+# Función para crear el token
+def crear_token_acceso(data: dict):
+    to_encode = data.copy()
+    expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
 
 @router.post("/verificar")
-def endpoint_verificar_credenciales(datos: CredencialesLogin):
-    ok = verificar_credenciales(datos.email, datos.contraseña)
-    if not ok:
-        raise HTTPException(status_code=400, detail="Credenciales incorrectas")
-    return {"ok": True}
+def endpoint_verificar_credenciales(datos: LoginRequest):
+    usuario = verificar_usuario_y_contraseña(datos.email, datos.contraseña)
+    if not usuario:
+        raise HTTPException(status_code=401, detail="Credenciales incorrectas")
+    token = crear_token_acceso({"sub": usuario.email})
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "user": usuario
+    }
+
 
 
 # --- ELIMINACIÓN ---
@@ -112,3 +163,5 @@ def eliminar_usuario_endpoint(usuario_id: int):
     if not ok:
         raise HTTPException(status_code=400, detail="No se pudo eliminar el usuario")
     return usuario  # Devuelves el usuario eliminado (antes de borrarlo)
+
+

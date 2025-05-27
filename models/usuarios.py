@@ -71,6 +71,10 @@ class UsuarioUpdate(BaseModel):
     admin_empresa: Optional[bool] = None
     empresa_id: Optional[str] = None
 
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+
 class CredencialesLogin(BaseModel):
     email: str
     contraseña: str
