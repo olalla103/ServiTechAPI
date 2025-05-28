@@ -9,7 +9,8 @@ from repository.handler_incidencia import (
     get_incidencia_by_tecnico_id,
     get_incidencia_by_cliente_id,
     get_incidencias_en_curso, update_incidencia, insertar_incidencia, filtrar_incidencias_handler, pausar_incidencia,
-    reanudar_incidencia
+    reanudar_incidencia, get_incidencia_by_tecnico_id_en_reparacion, get_incidencia_by_tecnico_id_pendiente,
+    get_incidencia_by_tecnico_id_resuelta
 )
 
 router = APIRouter()
@@ -17,6 +18,21 @@ router = APIRouter()
 @router.get("/", response_model=List[IncidenciaDB])
 def listar_incidencias():
     return get_all_incidencias()
+
+@router.get("/tecnico/{tecnico_id}/en-reparacion", response_model=List[IncidenciaDB])
+def incidencias_en_reparacion(tecnico_id: int):
+    incidencias = get_incidencia_by_tecnico_id_en_reparacion(tecnico_id)
+    return incidencias
+
+@router.get("/tecnico/{tecnico_id}/pendientes", response_model=List[IncidenciaDB])
+def incidencias_pendientes(tecnico_id: int):
+    incidencias = get_incidencia_by_tecnico_id_pendiente(tecnico_id)
+    return incidencias
+
+@router.get("/tecnico/{tecnico_id}/resueltas", response_model=List[IncidenciaDB])
+def incidencias_resueltas(tecnico_id: int):
+    incidencias = get_incidencia_by_tecnico_id_resuelta(tecnico_id)
+    return incidencias
 
 @router.post("/", response_model=IncidenciaDB)
 def crear_incidencia(datos: IncidenciaCreate):

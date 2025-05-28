@@ -1,6 +1,8 @@
 from fastapi import APIRouter, HTTPException
 from typing import List, Optional
 from models.usuarios import UsuarioDB, UsuarioCreate, UsuarioUpdate, TokenResponse
+from repository.handler_incidencia import get_incidencia_by_tecnico_id_en_reparacion, \
+    get_incidencia_by_tecnico_id_pendiente, get_incidencia_by_tecnico_id_resuelta
 from repository.handler_usuario import (
     get_all_usuarios,
     get_usuario_by_id,
@@ -12,7 +14,7 @@ from repository.handler_usuario import (
     eliminar_usuario,
     get_usuarios_ordenados_por_columna,
     actualizar_usuario,
-    get_usuario_by_email,
+    get_usuario_by_email, get_clientes_by_empresa_id,
 )
 from pydantic import BaseModel
 from jose import jwt
@@ -33,6 +35,13 @@ def buscar_usuario(nombre: str, apellido1: str, apellido2: str):
     if not usuario:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
     return usuario
+
+@router.get("/clientes/empresa/{empresa_id}", response_model=List[dict])
+def clientes_empresa(empresa_id: str):
+    """
+    Devuelve todos los clientes de una empresa según el criterio explicado.
+    """
+    return get_clientes_by_empresa_id(empresa_id)
 
 # Obtener usuario por id
 @router.get("/{usuario_id}", response_model=UsuarioDB)
@@ -76,6 +85,7 @@ def endpoint_recuperar_telefonos():
 @router.get("/{usuario_id}/especialidad", response_model=Optional[str])
 def endpoint_recuperar_especialidad(usuario_id: int):
     return recuperar_especialidad(usuario_id)
+
 
 # --- CREACIÓN, EDICIÓN Y VERIFICACIÓN ---
 

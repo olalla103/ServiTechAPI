@@ -254,3 +254,25 @@ def contar_incidencias_totales(cliente_id: int):
     except pymysql.MySQLError as e:
         print(f"Error al contar incidencias totales: {e}")
         return 0
+
+def get_clientes_by_empresa_id(empresa_id: str):
+    try:
+        with get_cursor() as cursor:
+            sql = """
+                SELECT id, nombre, apellidos, direccion, email, telefono
+                FROM usuarios
+                WHERE 
+                    (numero_seguridad_social IS NULL OR numero_seguridad_social = '')
+                    AND (especialidad IS NULL OR especialidad = '')
+                    AND (admin_empresa IS NULL OR admin_empresa = 0)
+                    AND empresa_id = %s
+            """
+            cursor.execute(sql, (empresa_id,))
+            clientes = cursor.fetchall()
+            return clientes
+    except Exception as e:
+        print(f"Error al obtener clientes por empresa: {e}")
+        return []
+
+
+
