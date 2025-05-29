@@ -14,7 +14,7 @@ from repository.handler_usuario import (
     eliminar_usuario,
     get_usuarios_ordenados_por_columna,
     actualizar_usuario,
-    get_usuario_by_email, get_clientes_by_empresa_id,
+    get_usuario_by_email, get_clientes_by_empresa_id, get_cliente_by_id,
 )
 from pydantic import BaseModel
 from jose import jwt
@@ -42,6 +42,14 @@ def clientes_empresa(empresa_id: str):
     Devuelve todos los clientes de una empresa según el criterio explicado.
     """
     return get_clientes_by_empresa_id(empresa_id)
+
+@router.get("/clientes/{cliente_id}", response_model=dict)
+def cliente_detalle(cliente_id: int):
+    cliente = get_cliente_by_id(cliente_id)
+    if cliente:
+        return cliente
+    else:
+        return {}
 
 # Obtener usuario por id
 @router.get("/{usuario_id}", response_model=UsuarioDB)
