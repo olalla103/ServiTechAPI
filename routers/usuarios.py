@@ -59,6 +59,14 @@ def obtener_usuario(usuario_id: int):
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
     return usuario
 
+@router.get("/clientes/{cliente_id}", response_model=dict)
+def cliente_detalle(cliente_id: int):
+    cliente = get_cliente_by_id(cliente_id)
+    if cliente:
+        return cliente
+    else:
+        return {}
+
 # Obtener todos los usuarios
 @router.get("/", response_model=List[UsuarioDB])
 def listar_usuarios():

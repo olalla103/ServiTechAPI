@@ -1,6 +1,9 @@
 from pydantic import BaseModel, EmailStr, field_validator
-from typing import Optional
+from typing import Optional, List
 from datetime import date
+
+from models.direcciones import DireccionBase
+
 
 class UsuarioBase(BaseModel):
     nombre: str
@@ -14,6 +17,7 @@ class UsuarioBase(BaseModel):
     numero_seguridad_social: Optional[str] = None
     admin_empresa: bool
     empresa_id: Optional[str] = None
+    direcciones: List[DireccionBase] = []
 
     @field_validator('telefono')
     def telefono_valido(cls, v):
