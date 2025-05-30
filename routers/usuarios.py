@@ -53,11 +53,12 @@ def cliente_detalle(cliente_id: int):
 
 # Obtener usuario por id
 @router.get("/{usuario_id}", response_model=UsuarioDB)
-def obtener_usuario(usuario_id: int):
+def detalle_usuario(usuario_id: int):
     usuario = get_usuario_by_id(usuario_id)
-    if not usuario:
+    if usuario:
+        return usuario
+    else:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
-    return usuario
 
 @router.get("/clientes/{cliente_id}", response_model=dict)
 def cliente_detalle(cliente_id: int):

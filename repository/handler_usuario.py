@@ -286,30 +286,22 @@ def get_cliente_by_id(cliente_id: int):
 def get_usuario_by_id(usuario_id: int):
     try:
         with get_cursor() as cursor:
-            sql = "SELECT * FROM usuarios WHERE id = %s"
-            cursor.execute(sql, (usuario_id,))
+            # 1. Obtén el usuario
+            sql_user = "SELECT * FROM usuarios WHERE id = %s"
+            cursor.execute(sql_user, (usuario_id,))
             usuario = cursor.fetchone()
             if usuario:
-                usuario['direcciones'] = get_direcciones_by_usuario_id(usuario_id)
+                # 2. Obtén sus direcciones
+                sql_dir = """
+                    SELECT id, calle, numero, piso, puerta, ciudad, cp, provincia, pais
+                    FROM direcciones
+                    WHERE usuario_id = %s
+                """
+                cursor.execute(sql_dir, (usuario_id,))
+                usuario['direcciones'] = cursor.fetchall()
                 return usuario
             else:
                 return None
     except pymysql.MySQLError as e:
         print(f"Error al recuperar usuario por id: {e}")
         return None
-
-def get_direcciones_by_usuario_id(usuario_id: int):
-    try:
-        with get_cursor() as cursor:
-            sql = """
-                SELECT d.id, d.calle, d.numero, d.piso, d.puerta, d.ciudad, d.cp, d.provincia, d.pais
-                FROM direcciones d
-                JOIN usuariodireccion ud ON ud.direccion_id = d.id
-                WHERE ud.usuario_id = %s;
-            """
-            cursor.execute(sql, (usuario_id,))
-            direcciones = cursor.fetchall()
-            return direcciones
-    except Exception as e:
-        print(f"Error al obtener direcciones: {e}")
-        return []
