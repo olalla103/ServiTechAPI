@@ -12,7 +12,7 @@ class UsuarioBase(BaseModel):
     email: EmailStr
     contraseña: str
     telefono: str
-    fecha_nacimiento: date
+    fecha_nacimiento: Optional[date] = None
     especialidad: Optional[str] = None
     numero_seguridad_social: Optional[str] = None
     admin_empresa: bool
@@ -31,14 +31,14 @@ class UsuarioBase(BaseModel):
             raise ValueError(f'El campo {field.name} no puede estar vacío')
         return v
 
-    @field_validator('fecha_nacimiento')
-    def fecha_nacimiento_valida(cls, v):
-        hoy = date.today()
-        if v > hoy:
-            raise ValueError('La fecha de nacimiento no puede ser futura')
-        if v.year < 1900:
-            raise ValueError('La fecha de nacimiento es demasiado antigua')
-        return v
+    # @field_validator('fecha_nacimiento')
+    # def fecha_nacimiento_valida(cls, v):
+    #     hoy = date.today()
+    #     if v > hoy:
+    #         raise ValueError('La fecha de nacimiento no puede ser futura')
+    #     if v.year < 1900:
+    #         raise ValueError('La fecha de nacimiento es demasiado antigua')
+    #     return v
 
     @field_validator('numero_seguridad_social')
     def nss_valido(cls, v):
@@ -66,7 +66,7 @@ class UsuarioUpdate(BaseModel):
     nombre: Optional[str] = None
     apellido1: Optional[str] = None
     apellido2: Optional[str] = None
-    email: Optional[EmailStr] = None
+    email: Optional[str] = None
     contraseña: Optional[str] = None
     telefono: Optional[str] = None
     fecha_nacimiento: Optional[date] = None
@@ -74,6 +74,7 @@ class UsuarioUpdate(BaseModel):
     numero_seguridad_social: Optional[str] = None
     admin_empresa: Optional[bool] = None
     empresa_id: Optional[str] = None
+    direcciones: Optional[List[DireccionBase]] = None
 
 class TokenResponse(BaseModel):
     access_token: str
@@ -84,7 +85,8 @@ class CredencialesLogin(BaseModel):
     contraseña: str
 
 class UsuarioDB(UsuarioBase):
-    id: int
+    pass
+
 
     class Config:
         orm_mode = True

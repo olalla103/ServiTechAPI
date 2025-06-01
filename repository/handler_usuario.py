@@ -305,3 +305,4 @@ def get_usuario_by_id(usuario_id: int):
     except pymysql.MySQLError as e:
         print(f"Error al recuperar usuario por id: {e}")
         return None
+

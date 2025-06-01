@@ -1,3 +1,5 @@
+from fastapi import Request
+
 from fastapi import APIRouter, HTTPException
 from typing import List, Optional
 from models.usuarios import UsuarioDB, UsuarioCreate, UsuarioUpdate, TokenResponse
@@ -109,11 +111,19 @@ def endpoint_recuperar_especialidad(usuario_id: int):
 # Insertar un usuario
 @router.post("", response_model=UsuarioDB)
 @router.post("/", response_model=UsuarioDB)
-def crear_usuario(datos: UsuarioCreate):
-    nueva_id = insertar_usuario(datos.model_dump())
+def crear_usuario(usuario: UsuarioCreate):
+    print("JSON recibido del frontend usuario:", usuario)
+    nueva_id = insertar_usuario(usuario.model_dump())
     if not nueva_id:
         raise HTTPException(status_code=400, detail="No se pudo crear el usuario")
     return get_usuario_by_id(nueva_id)
+
+@router.post("/debug", response_model=None)
+async def debug_usuario(request: Request):
+    body = await request.json()
+    print("JSON recibido del frontend:", body)
+    return {"ok": True}
+
 
 # Cambiar teléfono del usuario
 @router.patch("/{usuario_id}")
