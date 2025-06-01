@@ -306,3 +306,16 @@ def get_usuario_by_id(usuario_id: int):
         print(f"Error al recuperar usuario por id: {e}")
         return None
 
+def get_usuario_id_by_email(email: str):
+    """
+    Devuelve el ID del usuario a partir de su email.
+    """
+    try:
+        with get_cursor() as cursor:
+            sql = "SELECT id FROM usuarios WHERE email = %s"
+            cursor.execute(sql, (email,))
+            usuario = cursor.fetchone()
+            return usuario["id"] if usuario else None
+    except pymysql.MySQLError as e:
+        print(f"Error al recuperar ID de usuario por email: {e}")
+        return None

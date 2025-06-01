@@ -1,4 +1,4 @@
-from fastapi import Request
+from fastapi import Request, Query
 
 from fastapi import APIRouter, HTTPException
 from typing import List, Optional
@@ -16,7 +16,7 @@ from repository.handler_usuario import (
     eliminar_usuario,
     get_usuarios_ordenados_por_columna,
     actualizar_usuario,
-    get_usuario_by_email, get_clientes_by_empresa_id, get_cliente_by_id,
+    get_usuario_by_email, get_clientes_by_empresa_id, get_cliente_by_id, get_usuario_id_by_email,
 )
 from pydantic import BaseModel
 from jose import jwt
@@ -52,6 +52,14 @@ def cliente_detalle(cliente_id: int):
         return cliente
     else:
         return {}
+
+@router.get("/usuarios/id_por_email")
+def obtener_usuario_id_por_email(email: str = Query(...)):
+    print(f"Email recibido: {email}")
+    usuario_id = get_usuario_id_by_email(email)
+    if usuario_id is None:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    return {"id": usuario_id}
 
 # Obtener usuario por id
 @router.get("/{usuario_id}", response_model=UsuarioDB)
@@ -129,6 +137,9 @@ async def debug_usuario(request: Request):
 @router.patch("/{usuario_id}")
 def actualizar_usuario_endpoint(usuario_id: int, datos: UsuarioUpdate):
     campos = datos.model_dump(exclude_unset=True)
+    # Si no hay ningún campo a actualizar, devolver ok
+    if not campos:
+        return {"ok": True}
     ok = actualizar_usuario(usuario_id, campos)
     if not ok:
         raise HTTPException(status_code=400, detail="No se pudo actualizar el usuario")

@@ -12,7 +12,7 @@ class DireccionBase(BaseModel):
     pais: str
 
 class DireccionCreate(DireccionBase):
-    usuario_id: int
+    pass
 
 class DireccionUpdate(BaseModel):
     calle: Optional[str] = None

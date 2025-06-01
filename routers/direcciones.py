@@ -8,6 +8,7 @@ from repository.handler_direcciones import (
     actualizar_direccion,
     eliminar_direccion,
 )
+from repository.handler_usuario import get_usuario_id_by_email
 
 router = APIRouter()
 
@@ -25,6 +26,18 @@ def crear_direccion_usuario(usuario_id: int, datos: DireccionCreate):
     direccion = get_direccion_by_id(nueva_id)
     return direccion
 
+@router.post("/usuarios/{usuario_email}/direccionesmultiples", response_model=List[DireccionDB])
+def crear_direcciones_usuario(usuario_email: str,datos: List[DireccionCreate]):
+    usuario_id = get_usuario_id_by_email(usuario_email)
+    nuevas_direcciones = []
+    for d in datos:
+        nueva_id = insertar_direccion({**d.model_dump(), "usuario_id": usuario_id})
+        if not nueva_id:
+            raise HTTPException(status_code=400, detail="No se pudo crear una dirección")
+        direccion = get_direccion_by_id(nueva_id)
+        nuevas_direcciones.append(direccion)
+    return nuevas_direcciones
+
 # Obtener una dirección por id
 @router.get("/direcciones/{direccion_id}", response_model=DireccionDB)
 def obtener_direccion(direccion_id: int):
@@ -37,6 +50,9 @@ def obtener_direccion(direccion_id: int):
 @router.patch("/direcciones/{direccion_id}")
 def editar_direccion(direccion_id: int, datos: DireccionUpdate):
     campos = datos.model_dump(exclude_unset=True)
+    print("Campos dirección:", campos)
+    if not campos:
+        return {"ok": True}
     ok = actualizar_direccion(direccion_id, campos)
     if not ok:
         raise HTTPException(status_code=400, detail="No se pudo actualizar la dirección")
