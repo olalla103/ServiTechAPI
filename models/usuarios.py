@@ -31,15 +31,6 @@ class UsuarioBase(BaseModel):
             raise ValueError(f'El campo {field.name} no puede estar vacío')
         return v
 
-    # @field_validator('fecha_nacimiento')
-    # def fecha_nacimiento_valida(cls, v):
-    #     hoy = date.today()
-    #     if v > hoy:
-    #         raise ValueError('La fecha de nacimiento no puede ser futura')
-    #     if v.year < 1900:
-    #         raise ValueError('La fecha de nacimiento es demasiado antigua')
-    #     return v
-
     @field_validator('numero_seguridad_social')
     def nss_valido(cls, v):
         if v is not None and len(v) != 12:

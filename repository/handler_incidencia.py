@@ -214,8 +214,7 @@ def get_incidencias_en_curso():
 ########################### ACTUALIZAR INCIDENCIA ###########################
 def update_incidencia(incidencia_id: int, datos: dict):
     """
-    Actualiza los campos permitidos (horas y estado) de una incidencia.
-    `datos` debe ser un dict con claves 'horas' y/o 'estado'
+    Actualiza los campos permitidos (horas, estado, fecha_inicio, fecha_final) de una incidencia.
     """
     campos = []
     valores = []
@@ -236,6 +235,14 @@ def update_incidencia(incidencia_id: int, datos: dict):
     if "estado" in datos:
         campos.append("estado = %s")
         valores.append(datos["estado"])
+
+    if "fecha_inicio" in datos:
+        campos.append("fecha_inicio = %s")
+        valores.append(datos["fecha_inicio"])  # Debe ser string tipo "2025-06-01 10:00:00"
+
+    if "fecha_final" in datos:
+        campos.append("fecha_final = %s")
+        valores.append(datos["fecha_final"])
 
     if not campos:
         return None  # Nada que actualizar

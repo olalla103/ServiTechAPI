@@ -7,7 +7,7 @@ class IncidenciaBase(BaseModel):
     fecha_reporte: date
     estado: Literal['pendiente', 'en_reparacion', 'resuelta']
     direccion: str
-    fecha_inicio: Optional[date] = None
+    fecha_inicio: Optional[datetime] = None
     fecha_final: Optional[date] = None
     horas: Optional[time] = None
     cliente_id: int
