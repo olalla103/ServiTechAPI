@@ -4,32 +4,32 @@ from fecha_utils import timedelta, time
 from models.incidencias import IncidenciaDB
 from repository.conexion import get_cursor
 
-def insertar_incidencia(incidencia):
-    try:
-        with get_cursor() as cursor:
-            sql = """
-                INSERT INTO incidencias
-                (descripcion, fecha_reporte, estado, direccion, fecha_inicio, fecha_final, horas, cliente_id, tecnico_id)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-            """
-            valores = (
-                incidencia["descripcion"],
-                incidencia["fecha_reporte"],
-                incidencia["estado"],
-                incidencia["direccion"],
-                incidencia.get("fecha_inicio"),
-                incidencia.get("fecha_final"),
-                incidencia.get("horas"),
-                incidencia["cliente_id"],
-                incidencia["tecnico_id"]
-            )
-            cursor.execute(sql, valores)
-            return cursor.lastrowid
-    except pymysql.MySQLError as e:
-        print(f"Error al insertar incidencia: {e}")
-        return None
+from datetime import datetime
 
-########################### VER TODAS LA INCIDENCIAS ###########################
+def fix_datetime_field(val):
+    if val is None:
+        return None
+    if isinstance(val, datetime):
+        return val.strftime('%Y-%m-%d %H:%M:%S')
+    if isinstance(val, str):
+        # Si viene solo fecha
+        if len(val) == 10:
+            return val + " 00:00:00"
+        # Si viene con T (ISO), cámbialo a espacio
+        if "T" in val:
+            val = val.replace("T", " ")
+        # Si viene con punto y milisegundos, quítalo
+        if "." in val:
+            val = val.split(".")[0]
+        # Ahora intenta parsear siempre y devolver string con formato SQL
+        try:
+            dt = datetime.strptime(val, "%Y-%m-%d %H:%M:%S")
+            return dt.strftime("%Y-%m-%d %H:%M:%S")
+        except Exception:
+            # Si no se puede, devuelve tal cual (último recurso)
+            return val
+    return None
+
 def _to_time_if_needed(val):
     if val is None or isinstance(val, time):
         return val
@@ -43,6 +43,34 @@ def _to_time_if_needed(val):
         h, m, s = map(int, val.split(":"))
         return time(h, m, s)
     return None
+
+
+def insertar_incidencia(incidencia):
+    try:
+        with get_cursor() as cursor:
+            sql = """
+                INSERT INTO incidencias
+                (descripcion, fecha_reporte, estado, direccion, fecha_inicio, fecha_final, horas, cliente_id, tecnico_id)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """
+            valores = (
+                incidencia["descripcion"],
+                fix_datetime_field(incidencia["fecha_reporte"]),
+                incidencia["estado"],
+                incidencia["direccion"],
+                fix_datetime_field(incidencia.get("fecha_inicio")),
+                fix_datetime_field(incidencia.get("fecha_final")),
+                incidencia.get("horas"),
+                incidencia["cliente_id"],
+                incidencia["tecnico_id"]
+            )
+            cursor.execute(sql, valores)
+            return cursor.lastrowid
+    except pymysql.MySQLError as e:
+        print(f"Error al insertar incidencia: {e}")
+        return None
+
+########################### VER TODAS LA INCIDENCIAS ###########################
 
 def get_all_incidencias():
     try:
@@ -213,6 +241,8 @@ def get_incidencias_en_curso():
 
 ########################### ACTUALIZAR INCIDENCIA ###########################
 def update_incidencia(incidencia_id: int, datos: dict):
+    print(f"Datos recibidos para update: {datos}")
+    print(f"Intentando actualizar incidencia {incidencia_id} con datos: {datos}")
     """
     Actualiza los campos permitidos (horas, estado, fecha_inicio, fecha_final) de una incidencia.
     """
@@ -238,14 +268,34 @@ def update_incidencia(incidencia_id: int, datos: dict):
 
     if "fecha_inicio" in datos:
         campos.append("fecha_inicio = %s")
-        valores.append(datos["fecha_inicio"])  # Debe ser string tipo "2025-06-01 10:00:00"
+        valores.append(fix_datetime_field(datos["fecha_inicio"]))  # <-- adaptado
 
     if "fecha_final" in datos:
         campos.append("fecha_final = %s")
-        valores.append(datos["fecha_final"])
+        valores.append(fix_datetime_field(datos["fecha_final"]))  # <-- adaptado
+
+    # Si quieres añadir fecha_reporte también:
+    if "fecha_reporte" in datos:
+        campos.append("fecha_reporte = %s")
+        valores.append(fix_datetime_field(datos["fecha_reporte"]))
 
     if not campos:
         return None  # Nada que actualizar
+
+    valores.append(incidencia_id)
+    sql = f"UPDATE incidencias SET {', '.join(campos)} WHERE id = %s"
+    print(f"QUERY: {sql}")
+    print(f"VALORES: {valores}")
+    try:
+        with get_cursor() as cursor:
+            cursor.execute(sql, tuple(valores))
+            if cursor.rowcount == 0:
+                return None
+        return get_incidencia_by_id(incidencia_id)
+    except Exception as e:
+        print(f"Error al actualizar incidencia: {e}")
+        return None
+
 
     valores.append(incidencia_id)
 
@@ -262,6 +312,20 @@ def update_incidencia(incidencia_id: int, datos: dict):
         return None
 
 ############################ PAUSAR INCIDENCIA ###########################
+
+
+def update_incidencia_pausa(cursor, incidencia_id, fecha_hora_pausa_str, horas_str):
+    sql = """
+        UPDATE incidencias
+        SET pausada = TRUE,
+            fecha_hora_pausa = %s,
+            horas = %s
+        WHERE id = %s
+    """
+    cursor.execute(sql, (fecha_hora_pausa_str, horas_str, incidencia_id))
+    return cursor.rowcount > 0
+
+
 def pausar_incidencia(incidencia_id: int, fecha_hora_pausa):
     try:
         incidencia = get_incidencia_by_id(incidencia_id)
@@ -275,17 +339,63 @@ def pausar_incidencia(incidencia_id: int, fecha_hora_pausa):
             print("La incidencia ya está pausada.")
             return None
 
+        # Calcula las horas acumuladas
+        horas_str = calcular_horas_totales(incidencia, fecha_hora_pausa)
+        # Normaliza fecha_hora_pausa
+        if isinstance(fecha_hora_pausa, str) and "T" in fecha_hora_pausa:
+            fecha_hora_pausa_str = fecha_hora_pausa.split(".")[0].replace("T", " ")
+        elif isinstance(fecha_hora_pausa, datetime):
+            fecha_hora_pausa_str = fecha_hora_pausa.strftime('%Y-%m-%d %H:%M:%S')
+        else:
+            fecha_hora_pausa_str = fecha_hora_pausa
+
         with get_cursor() as cursor:
-            sql = "UPDATE incidencias SET pausada = TRUE, fecha_hora_pausa = %s WHERE id = %s"
-            if fecha_hora_pausa is not None and hasattr(fecha_hora_pausa, "strftime"):
-                fecha_hora_pausa = fecha_hora_pausa.strftime("%Y-%m-%d %H:%M:%S")
-            cursor.execute(sql, (fecha_hora_pausa, incidencia_id))
-            if cursor.rowcount == 0:
+            update_ok = update_incidencia_pausa(cursor, incidencia_id, fecha_hora_pausa_str, horas_str)
+            if not update_ok:
                 return None
         return get_incidencia_by_id(incidencia_id)
+
     except Exception as e:
         print(f"Error al pausar incidencia: {e}")
         return None
+
+
+def calcular_horas_totales(incidencia, fecha_hora_pausa):
+    # Convierte fechas a datetime si son string
+    if isinstance(fecha_hora_pausa, str):
+        if "T" in fecha_hora_pausa:
+            fecha_hora_pausa_dt = datetime.strptime(fecha_hora_pausa.split(".")[0], "%Y-%m-%dT%H:%M:%S")
+        else:
+            fecha_hora_pausa_dt = datetime.strptime(fecha_hora_pausa, "%Y-%m-%d %H:%M:%S")
+    else:
+        fecha_hora_pausa_dt = fecha_hora_pausa
+
+    fecha_inicio_dt = incidencia.fecha_inicio
+    if isinstance(fecha_inicio_dt, str):
+        fecha_inicio_dt = datetime.strptime(fecha_inicio_dt, "%Y-%m-%d %H:%M:%S")
+
+    tiempo_transcurrido = fecha_hora_pausa_dt - fecha_inicio_dt
+
+    # Suma el tiempo a las horas acumuladas
+    horas_previas = incidencia.horas or time(0, 0, 0)
+    if isinstance(horas_previas, str):
+        h, m, s = map(int, horas_previas.split(":"))
+        horas_previas = timedelta(hours=h, minutes=m, seconds=s)
+    elif isinstance(horas_previas, time):
+        horas_previas = timedelta(hours=horas_previas.hour, minutes=horas_previas.minute, seconds=horas_previas.second)
+    else:
+        horas_previas = timedelta()
+
+    total_horas = horas_previas + tiempo_transcurrido
+
+    # Convierte a formato HH:MM:SS para guardar en MySQL
+    total_seconds = int(total_horas.total_seconds())
+    h = total_seconds // 3600
+    m = (total_seconds % 3600) // 60
+    s = total_seconds % 60
+    horas_str = f"{h:02}:{m:02}:{s:02}"
+    return horas_str
+
 
 ############################ REANUDAR INCIDENCIA ###########################
 def reanudar_incidencia(incidencia_id: int):
@@ -302,6 +412,7 @@ def reanudar_incidencia(incidencia_id: int):
             return None
 
         with get_cursor() as cursor:
+            # Al reanudar, pausada = FALSE y fecha_hora_pausa = NULL
             sql = "UPDATE incidencias SET pausada = FALSE, fecha_hora_pausa = NULL WHERE id = %s"
             cursor.execute(sql, (incidencia_id,))
             if cursor.rowcount == 0:
@@ -310,6 +421,7 @@ def reanudar_incidencia(incidencia_id: int):
     except Exception as e:
         print(f"Error al reanudar incidencia: {e}")
         return None
+
 
 ############################ FILTROS ###########################
 def filtrar_incidencias_handler(estado, tipo, tecnico_id, cliente_id):
@@ -333,7 +445,40 @@ def filtrar_incidencias_handler(estado, tipo, tecnico_id, cliente_id):
             incidencias = cursor.fetchall()
             for incidencia in incidencias:
                 incidencia["horas"] = _to_time_if_needed(incidencia.get("horas"))
+                # Transforma los campos datetime a string si hace falta
+                if "fecha_reporte" in incidencia:
+                    incidencia["fecha_reporte"] = fix_datetime_field(incidencia["fecha_reporte"])
+                if "fecha_inicio" in incidencia:
+                    incidencia["fecha_inicio"] = fix_datetime_field(incidencia["fecha_inicio"])
+                if "fecha_final" in incidencia:
+                    incidencia["fecha_final"] = fix_datetime_field(incidencia["fecha_final"])
+                if "fecha_hora_pausa" in incidencia:
+                    incidencia["fecha_hora_pausa"] = fix_datetime_field(incidencia["fecha_hora_pausa"])
             return [IncidenciaDB(**incidencia) for incidencia in incidencias]
     except Exception as e:
         print(f"Error al filtrar incidencias: {e}")
         return []
+
+def finalizar_incidencia(incidencia_id: int, fecha_final: str, horas: str):
+    """
+    Marca la incidencia como resuelta, guarda fecha_final y horas trabajadas.
+    - incidencia_id: id de la incidencia a finalizar.
+    - fecha_final: string con formato "YYYY-MM-DD HH:MM:SS"
+    - horas: string con formato "HH:MM:SS"
+    """
+    try:
+        with get_cursor() as cursor:
+            sql = """
+                UPDATE incidencias
+                SET estado = 'resuelta', fecha_final = %s, horas = %s
+                WHERE id = %s
+            """
+            cursor.execute(sql, (fecha_final, horas, incidencia_id))
+            if cursor.rowcount == 0:
+                print("No se encontró la incidencia para finalizar.")
+                return None
+        # Devuelve la incidencia actualizada
+        return get_incidencia_by_id(incidencia_id)
+    except Exception as e:
+        print(f"Error al finalizar incidencia: {e}")
+        return None
