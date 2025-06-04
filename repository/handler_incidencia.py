@@ -1,5 +1,5 @@
 import pymysql
-
+import traceback
 from fecha_utils import timedelta, time
 from models.incidencias import IncidenciaDB
 from repository.conexion import get_cursor
@@ -60,7 +60,7 @@ def insertar_incidencia(incidencia):
                 incidencia["direccion"],
                 fix_datetime_field(incidencia.get("fecha_inicio")),
                 fix_datetime_field(incidencia.get("fecha_final")),
-                incidencia.get("horas"),
+                incidencia.get("horas") or "00:00:00",  # Asegura que horas sea un string "HH:MM:SS"
                 incidencia["cliente_id"],
                 incidencia["tecnico_id"]
             )
@@ -109,7 +109,7 @@ def get_incidencia_by_id(incidencia_id: int):
 def get_all_incidencias_pendientes():
     try:
         with get_cursor() as cursor:
-            sql = "SELECT * FROM incidencias where estado = 'pendiente' order by fecha_reporte asc limit 5"
+            sql = "SELECT * FROM incidencias where estado = 'pendiente' order by fecha_reporte asc "
             cursor.execute(sql)
             incidencias = cursor.fetchall()
             return [IncidenciaDB(**incidencia) for incidencia in incidencias]
@@ -251,7 +251,10 @@ def update_incidencia(incidencia_id: int, datos: dict):
 
     if "horas" in datos:
         horas_val = datos["horas"]
-        if isinstance(horas_val, time):
+        if isinstance(horas_val, str):
+            # Ya está en el formato correcto
+            pass
+        elif isinstance(horas_val, time):
             horas_val = horas_val.strftime("%H:%M:%S")
         elif isinstance(horas_val, timedelta):
             total_seconds = int(horas_val.total_seconds())
@@ -283,24 +286,10 @@ def update_incidencia(incidencia_id: int, datos: dict):
         return None  # Nada que actualizar
 
     valores.append(incidencia_id)
+    print("VALOR HORAS AL UPDATE: ",horas_val,type(horas_val))
     sql = f"UPDATE incidencias SET {', '.join(campos)} WHERE id = %s"
     print(f"QUERY: {sql}")
     print(f"VALORES: {valores}")
-    try:
-        with get_cursor() as cursor:
-            cursor.execute(sql, tuple(valores))
-            if cursor.rowcount == 0:
-                return None
-        return get_incidencia_by_id(incidencia_id)
-    except Exception as e:
-        print(f"Error al actualizar incidencia: {e}")
-        return None
-
-
-    valores.append(incidencia_id)
-
-    sql = f"UPDATE incidencias SET {', '.join(campos)} WHERE id = %s"
-
     try:
         with get_cursor() as cursor:
             cursor.execute(sql, tuple(valores))
@@ -325,77 +314,168 @@ def update_incidencia_pausa(cursor, incidencia_id, fecha_hora_pausa_str, horas_s
     cursor.execute(sql, (fecha_hora_pausa_str, horas_str, incidencia_id))
     return cursor.rowcount > 0
 
-
+from datetime import datetime, timedelta
+from models.incidencias import IncidenciaDB
 def pausar_incidencia(incidencia_id: int, fecha_hora_pausa):
     try:
         incidencia = get_incidencia_by_id(incidencia_id)
         if not incidencia:
             print("Incidencia no encontrada.")
             return None
+
         if incidencia.estado != 'en_reparacion':
             print("Solo se puede pausar una incidencia en reparación.")
             return None
+
         if incidencia.pausada:
             print("La incidencia ya está pausada.")
             return None
 
-        # Calcula las horas acumuladas
-        horas_str = calcular_horas_totales(incidencia, fecha_hora_pausa)
-        # Normaliza fecha_hora_pausa
-        if isinstance(fecha_hora_pausa, str) and "T" in fecha_hora_pausa:
-            fecha_hora_pausa_str = fecha_hora_pausa.split(".")[0].replace("T", " ")
-        elif isinstance(fecha_hora_pausa, datetime):
-            fecha_hora_pausa_str = fecha_hora_pausa.strftime('%Y-%m-%d %H:%M:%S')
-        else:
-            fecha_hora_pausa_str = fecha_hora_pausa
+        # Calcular tiempo transcurrido
+        fecha_base = incidencia.fecha_ultimo_reinicio if incidencia.fecha_ultimo_reinicio else incidencia.fecha_inicio
 
+        # Normalizar fechas
+        if isinstance(fecha_base, str):
+            fecha_base = datetime.strptime(fecha_base.split(".")[0].replace("T", " "), "%Y-%m-%d %H:%M:%S")
+        if isinstance(fecha_hora_pausa, str):
+            try:
+                fecha_hora_pausa = datetime.fromisoformat(fecha_hora_pausa.replace("Z", "+00:00"))
+            except Exception:
+                fecha_hora_pausa = datetime.strptime(fecha_hora_pausa.split(".")[0].replace("T", " "), "%Y-%m-%d %H:%M:%S")
+
+        # Eliminar zona horaria si existe
+        if hasattr(fecha_base, 'tzinfo') and fecha_base.tzinfo is not None:
+            fecha_base = fecha_base.replace(tzinfo=None)
+        if hasattr(fecha_hora_pausa, 'tzinfo') and fecha_hora_pausa.tzinfo is not None:
+            fecha_hora_pausa = fecha_hora_pausa.replace(tzinfo=None)
+
+        tiempo_transcurrido = fecha_hora_pausa - fecha_base
+        print(f"Tiempo transcurrido: {tiempo_transcurrido}")
+
+        # Obtener horas previas (siempre inicializar como timedelta(0))
+        horas_previas = timedelta(0)
+        if hasattr(incidencia, 'horas') and incidencia.horas is not None:
+            try:
+                if isinstance(incidencia.horas, time):
+                    horas_previas = timedelta(
+                        hours=incidencia.horas.hour,
+                        minutes=incidencia.horas.minute,
+                        seconds=incidencia.horas.second
+                    )
+                elif isinstance(incidencia.horas, str):
+                    if ":" in incidencia.horas:
+                        h, m, s = map(int, incidencia.horas.split(":"))
+                        horas_previas = timedelta(hours=h, minutes=m, seconds=s)
+                elif isinstance(incidencia.horas, timedelta):
+                    horas_previas = incidencia.horas
+                else:
+                    print(f"Tipo no reconocido: {type(incidencia.horas)}")
+            except Exception as e:
+                print(f"Error al convertir horas: {e}")
+                horas_previas = timedelta(0)
+
+        print(f"Horas previas después de conversión: {horas_previas}")
+
+        # Calcular total de horas y evitar negativos
+        total_horas = horas_previas + tiempo_transcurrido
+        if total_horas.total_seconds() < 0:
+            total_horas = timedelta(0)
+        total_seconds = int(total_horas.total_seconds())
+        h = total_seconds // 3600
+        m = (total_seconds % 3600) // 60
+        s = total_seconds % 60
+        horas_str = f"{h:02}:{m:02}:{s:02}"
+
+        print(f"Horas totales calculadas: {horas_str}")
+
+        # Actualizar BD
         with get_cursor() as cursor:
-            update_ok = update_incidencia_pausa(cursor, incidencia_id, fecha_hora_pausa_str, horas_str)
-            if not update_ok:
+            sql = """
+                UPDATE incidencias
+                SET pausada = TRUE,
+                    fecha_hora_pausa = %s,
+                    horas = %s,
+                    fecha_ultimo_reinicio = NULL
+                WHERE id = %s
+            """
+            cursor.execute(sql, (
+                fecha_hora_pausa.strftime('%Y-%m-%d %H:%M:%S'),
+                horas_str,
+                incidencia_id
+            ))
+            if cursor.rowcount == 0:
+                print("No se actualizó ninguna fila")
                 return None
+
         return get_incidencia_by_id(incidencia_id)
 
     except Exception as e:
         print(f"Error al pausar incidencia: {e}")
+        print(f"Traceback completo: {traceback.format_exc()}")
         return None
 
-
 def calcular_horas_totales(incidencia, fecha_hora_pausa):
-    # Convierte fechas a datetime si son string
+    if not incidencia or not fecha_hora_pausa:
+        print("Faltan datos requeridos")
+        return "00:00:00"
+    # --- Convertir fecha_hora_pausa a datetime ---
     if isinstance(fecha_hora_pausa, str):
-        if "T" in fecha_hora_pausa:
-            fecha_hora_pausa_dt = datetime.strptime(fecha_hora_pausa.split(".")[0], "%Y-%m-%dT%H:%M:%S")
-        else:
-            fecha_hora_pausa_dt = datetime.strptime(fecha_hora_pausa, "%Y-%m-%d %H:%M:%S")
+        try:
+            fecha_hora_pausa_dt = datetime.fromisoformat(fecha_hora_pausa.replace("Z", "+00:00"))
+        except Exception:
+            if "T" in fecha_hora_pausa:
+                fecha_hora_pausa_dt = datetime.strptime(fecha_hora_pausa.split(".")[0], "%Y-%m-%dT%H:%M:%S")
+            else:
+                fecha_hora_pausa_dt = datetime.strptime(fecha_hora_pausa, "%Y-%m-%d %H:%M:%S")
     else:
         fecha_hora_pausa_dt = fecha_hora_pausa
 
+    # --- Convertir fecha_inicio a datetime ---
     fecha_inicio_dt = incidencia.fecha_inicio
     if isinstance(fecha_inicio_dt, str):
-        fecha_inicio_dt = datetime.strptime(fecha_inicio_dt, "%Y-%m-%d %H:%M:%S")
+        try:
+            fecha_inicio_dt = datetime.fromisoformat(fecha_inicio_dt.replace("Z", "+00:00"))
+        except Exception:
+            fecha_inicio_dt = datetime.strptime(fecha_inicio_dt, "%Y-%m-%d %H:%M:%S")
 
-    tiempo_transcurrido = fecha_hora_pausa_dt - fecha_inicio_dt
+    # --- Siempre restar aware-naive ---
+    if hasattr(fecha_inicio_dt, 'tzinfo') and fecha_inicio_dt.tzinfo is not None:
+        fecha_inicio_dt = fecha_inicio_dt.replace(tzinfo=None)
+    if hasattr(fecha_hora_pausa_dt, 'tzinfo') and fecha_hora_pausa_dt.tzinfo is not None:
+        fecha_hora_pausa_dt = fecha_hora_pausa_dt.replace(tzinfo=None)
 
-    # Suma el tiempo a las horas acumuladas
-    horas_previas = incidencia.horas or time(0, 0, 0)
-    if isinstance(horas_previas, str):
-        h, m, s = map(int, horas_previas.split(":"))
-        horas_previas = timedelta(hours=h, minutes=m, seconds=s)
+    # --- Calcular horas previas ---
+    horas_previas = getattr(incidencia, "horas", None)
+    if horas_previas is None:
+        horas_previas = timedelta(0)
+    elif isinstance(horas_previas, str):
+        try:
+            h, m, s = map(int, horas_previas.split(":"))
+            horas_previas = timedelta(hours=h, minutes=m, seconds=s)
+        except Exception:
+            horas_previas = timedelta(0)
     elif isinstance(horas_previas, time):
         horas_previas = timedelta(hours=horas_previas.hour, minutes=horas_previas.minute, seconds=horas_previas.second)
+    elif isinstance(horas_previas, timedelta):
+        pass
     else:
-        horas_previas = timedelta()
+        horas_previas = timedelta(0)
 
-    total_horas = horas_previas + tiempo_transcurrido
+    # --- Calcular el nuevo tramo ---
+    tiempo_tramo = fecha_hora_pausa_dt - fecha_inicio_dt
+    if tiempo_tramo.total_seconds() < 0:
+        tiempo_tramo = timedelta(0)  # Nunca sumar negativo
 
-    # Convierte a formato HH:MM:SS para guardar en MySQL
+    # --- Sumamos ambos ---
+    total_horas = horas_previas + tiempo_tramo
+
+    # --- Guardar siempre como string "HH:MM:SS" ---
     total_seconds = int(total_horas.total_seconds())
     h = total_seconds // 3600
     m = (total_seconds % 3600) // 60
     s = total_seconds % 60
     horas_str = f"{h:02}:{m:02}:{s:02}"
     return horas_str
-
 
 ############################ REANUDAR INCIDENCIA ###########################
 def reanudar_incidencia(incidencia_id: int):
@@ -407,16 +487,29 @@ def reanudar_incidencia(incidencia_id: int):
         if incidencia.estado != 'en_reparacion':
             print("Solo se puede reanudar una incidencia en reparación.")
             return None
+        # Verificar si la incidencia ya está pausada
+        if incidencia.pausada:
+            print("La incidencia ya está pausada.")
+            return None
         if not incidencia.pausada:
             print("La incidencia no está pausada.")
             return None
 
+        now = datetime.now()  # o datetime.utcnow()
+
         with get_cursor() as cursor:
-            # Al reanudar, pausada = FALSE y fecha_hora_pausa = NULL
-            sql = "UPDATE incidencias SET pausada = FALSE, fecha_hora_pausa = NULL WHERE id = %s"
-            cursor.execute(sql, (incidencia_id,))
+            # Solo cambia pausada, fecha_hora_pausa y fecha_ultimo_reinicio
+            sql = """
+                  UPDATE incidencias
+                  SET pausada = FALSE,
+                      fecha_hora_pausa = NULL,
+                      fecha_ultimo_reinicio = %s
+                  WHERE id = %s
+                  """
+            cursor.execute(sql, (now.strftime('%Y-%m-%d %H:%M:%S'), incidencia_id))
             if cursor.rowcount == 0:
                 return None
+
         return get_incidencia_by_id(incidencia_id)
     except Exception as e:
         print(f"Error al reanudar incidencia: {e}")

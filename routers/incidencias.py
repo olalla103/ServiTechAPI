@@ -99,6 +99,7 @@ def crear_incidencia(datos: IncidenciaCreate):
 
 @router.put("/{incidencia_id}", response_model=IncidenciaDB)
 def actualizar_incidencia(incidencia_id: int, datos: IncidenciaUpdate):
+    print(f"Datos recibidos para actualizar incidencia {incidencia_id}: {datos}")
     incidencia_modificada = update_incidencia(incidencia_id, datos.dict(exclude_unset=True))
     if not incidencia_modificada:
         raise HTTPException(status_code=404, detail="Incidencia no encontrada o no se pudo actualizar")

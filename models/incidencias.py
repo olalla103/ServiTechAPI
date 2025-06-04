@@ -15,6 +15,7 @@ class IncidenciaBase(BaseModel):
     tipo: Literal['presencial', 'remota']
     pausada: bool
     fecha_hora_pausa: Optional[datetime] = None  # Fecha y hora de la pausa
+    fecha_ultimo_reinicio: Optional[datetime] = None  # <--- AÑADE ESTO
 
     @field_validator('cliente_id', 'tecnico_id')
     def ids_positivos(cls, v):
@@ -30,8 +31,12 @@ class IncidenciaBase(BaseModel):
         return v
 
     @field_validator('horas')
-    def horas_no_negativas(cls, v):
+    def horas_no_negativas(cls, v, info):
+        # Permitir 00:00:00 si la incidencia está pendiente
+        estado = info.data.get('estado')
         if v is not None and v.hour == 0 and v.minute == 0 and v.second == 0:
+            if estado in ('pendiente', 'en_reparacion'):
+                return v
             raise ValueError('Las horas deben ser mayores que cero')
         return v
 
@@ -60,7 +65,7 @@ class FinalizarIncidenciaInput(BaseModel):
     horas: str        # formato "01:32:21"
 
 class IncidenciaUpdate(BaseModel):
-    horas: Optional[time] = None
+    horas: Optional[str] = None
     estado: Optional[Literal['pendiente', 'en_reparacion', 'resuelta']] = None
     fecha_inicio: Optional[datetime] = None
     fecha_final: Optional[datetime] = None
