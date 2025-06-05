@@ -9,7 +9,7 @@ class IncidenciaBase(BaseModel):
     direccion: str
     fecha_inicio: Optional[datetime] = None    # Fecha y hora de inicio
     fecha_final: Optional[datetime] = None     # Fecha y hora de finalización
-    horas: Optional[time] = None               # Tiempo total trabajado
+    horas: Optional[str] = None               # Tiempo total trabajado
     cliente_id: int
     tecnico_id: int
     tipo: Literal['presencial', 'remota']
@@ -30,15 +30,22 @@ class IncidenciaBase(BaseModel):
             raise ValueError('La fecha final no puede ser anterior a la fecha de inicio')
         return v
 
-    @field_validator('horas')
-    def horas_no_negativas(cls, v, info):
-        # Permitir 00:00:00 si la incidencia está pendiente
-        estado = info.data.get('estado')
-        if v is not None and v.hour == 0 and v.minute == 0 and v.second == 0:
-            if estado in ('pendiente', 'en_reparacion'):
-                return v
-            raise ValueError('Las horas deben ser mayores que cero')
-        return v
+    @field_validator('horas', mode='before')
+    def format_horas(cls, v):
+        if v is None:
+            return None
+        if isinstance(v, str):
+            parts = v.split(':')
+            if len(parts) == 3:
+                try:
+                    h, m, s = [int(x) for x in parts]
+                    return f"{h:02}:{m:02}:{s:02}"
+                except Exception:
+                    return v
+            return v
+        if hasattr(v, 'strftime'):
+            return v.strftime('%H:%M:%S')
+        return str(v)
 
     @field_validator('fecha_hora_pausa')
     def fecha_pausa_en_rango(cls, v, info):
@@ -74,6 +81,4 @@ class IncidenciaUpdate(BaseModel):
 
 class IncidenciaDB(IncidenciaBase):
     id: int
-
-    class Config:
-        orm_mode = True
+    model_config = {"from_attributes": True}

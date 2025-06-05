@@ -111,7 +111,6 @@ import logging
 
 @router.patch("/pausar/{incidencia_id}", response_model=IncidenciaDB)
 def endpoint_pausar_incidencia(incidencia_id: int, datos: PausaIncidencia):
-    import logging
     logging.warning(f"Recibido: {datos.fecha_hora_pausa}")
     if datos.fecha_hora_pausa is None:
         raise HTTPException(status_code=400, detail="Debe enviar la fecha y hora de la pausa.")
@@ -123,10 +122,37 @@ def endpoint_pausar_incidencia(incidencia_id: int, datos: PausaIncidencia):
 
 @router.patch("/reanudar/{incidencia_id}", response_model=IncidenciaDB)
 def endpoint_reanudar_incidencia(incidencia_id: int):
+    print("----- REANUDAR INCIDENCIA -----")
+    print(f"ID recibido en URL para reanudar: {incidencia_id}")
+
+    incidencia_antes = get_incidencia_by_id(incidencia_id)
+    if incidencia_antes:
+        print(f"ANTES de reanudar:")
+        print(f"  horas: {incidencia_antes.horas}")
+        print(f"  pausada: {incidencia_antes.pausada}")
+        print(f"  fecha_ultimo_reinicio: {incidencia_antes.fecha_ultimo_reinicio}")
+        print(f"  fecha_inicio: {incidencia_antes.fecha_inicio}")
+        print(f"  fecha_hora_pausa: {incidencia_antes.fecha_hora_pausa}")
+    else:
+        print("  No se encontró la incidencia antes de reanudar.")
+
     incidencia_modificada = reanudar_incidencia(incidencia_id)
+
+    incidencia_despues = get_incidencia_by_id(incidencia_id)
+    if incidencia_despues:
+        print(f"DESPUÉS de reanudar:")
+        print(f"  horas: {incidencia_despues.horas}")
+        print(f"  pausada: {incidencia_despues.pausada}")
+        print(f"  fecha_ultimo_reinicio: {incidencia_despues.fecha_ultimo_reinicio}")
+        print(f"  fecha_inicio: {incidencia_despues.fecha_inicio}")
+        print(f"  fecha_hora_pausa: {incidencia_despues.fecha_hora_pausa}")
+    else:
+        print("  No se encontró la incidencia después de reanudar.")
+
     if not incidencia_modificada:
         raise HTTPException(status_code=400, detail="No se pudo reanudar: revisa estado o si está pausada.")
     return incidencia_modificada
+
 
 @router.patch("/finalizar/{incidencia_id}", response_model=IncidenciaDB)
 def endpoint_finalizar_incidencia(incidencia_id: int, datos: FinalizarIncidenciaInput):

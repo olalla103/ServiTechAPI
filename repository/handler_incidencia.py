@@ -4,7 +4,8 @@ from fecha_utils import timedelta, time
 from models.incidencias import IncidenciaDB
 from repository.conexion import get_cursor
 
-from datetime import datetime
+from datetime import datetime, timezone
+
 
 def fix_datetime_field(val):
     if val is None:
@@ -31,19 +32,19 @@ def fix_datetime_field(val):
     return None
 
 def _to_time_if_needed(val):
-    if val is None or isinstance(val, time):
-        return val
+    if val is None:
+        return None
+    if isinstance(val, str):
+        return val  # Ya string, lo devuelve tal cual
+    if isinstance(val, time):
+        return val.strftime('%H:%M:%S')
     if isinstance(val, timedelta):
         total_seconds = int(val.total_seconds())
         hours = total_seconds // 3600
         minutes = (total_seconds % 3600) // 60
         seconds = total_seconds % 60
-        return time(hours, minutes, seconds)
-    if isinstance(val, str):
-        h, m, s = map(int, val.split(":"))
-        return time(h, m, s)
-    return None
-
+        return f"{hours:02}:{minutes:02}:{seconds:02}"
+    return str(val)
 
 def insertar_incidencia(incidencia):
     try:
@@ -331,6 +332,12 @@ def pausar_incidencia(incidencia_id: int, fecha_hora_pausa):
             print("La incidencia ya está pausada.")
             return None
 
+        # LOGS: Valores actuales
+        print(f"[PAUSAR] horas antes de la suma: {incidencia.horas} (type={type(incidencia.horas)})")
+        print(f"[PAUSAR] fecha_inicio: {incidencia.fecha_inicio}")
+        print(f"[PAUSAR] fecha_ultimo_reinicio: {incidencia.fecha_ultimo_reinicio}")
+        print(f"[PAUSAR] fecha_hora_pausa recibida: {fecha_hora_pausa}")
+
         # Calcular tiempo transcurrido
         fecha_base = incidencia.fecha_ultimo_reinicio if incidencia.fecha_ultimo_reinicio else incidencia.fecha_inicio
 
@@ -345,12 +352,12 @@ def pausar_incidencia(incidencia_id: int, fecha_hora_pausa):
 
         # Eliminar zona horaria si existe
         if hasattr(fecha_base, 'tzinfo') and fecha_base.tzinfo is not None:
-            fecha_base = fecha_base.replace(tzinfo=None)
+            fecha_base = fecha_base.astimezone(timezone.utc).replace(tzinfo=None)
         if hasattr(fecha_hora_pausa, 'tzinfo') and fecha_hora_pausa.tzinfo is not None:
-            fecha_hora_pausa = fecha_hora_pausa.replace(tzinfo=None)
+            fecha_hora_pausa = fecha_hora_pausa.astimezone(timezone.utc).replace(tzinfo=None)
 
         tiempo_transcurrido = fecha_hora_pausa - fecha_base
-        print(f"Tiempo transcurrido: {tiempo_transcurrido}")
+        print(f"[PAUSAR] Tiempo transcurrido en este tramo: {tiempo_transcurrido}")
 
         # Obtener horas previas (siempre inicializar como timedelta(0))
         horas_previas = timedelta(0)
@@ -374,11 +381,12 @@ def pausar_incidencia(incidencia_id: int, fecha_hora_pausa):
                 print(f"Error al convertir horas: {e}")
                 horas_previas = timedelta(0)
 
-        print(f"Horas previas después de conversión: {horas_previas}")
+        print(f"[PAUSAR] Horas previas después de conversión: {horas_previas}")
 
         # Calcular total de horas y evitar negativos
         total_horas = horas_previas + tiempo_transcurrido
         if total_horas.total_seconds() < 0:
+            print("[PAUSAR] El total de horas es negativo, se deja en 0.")
             total_horas = timedelta(0)
         total_seconds = int(total_horas.total_seconds())
         h = total_seconds // 3600
@@ -386,7 +394,7 @@ def pausar_incidencia(incidencia_id: int, fecha_hora_pausa):
         s = total_seconds % 60
         horas_str = f"{h:02}:{m:02}:{s:02}"
 
-        print(f"Horas totales calculadas: {horas_str}")
+        print(f"[PAUSAR] Guardando horas_str: {horas_str}")
 
         # Actualizar BD
         with get_cursor() as cursor:
@@ -404,7 +412,7 @@ def pausar_incidencia(incidencia_id: int, fecha_hora_pausa):
                 incidencia_id
             ))
             if cursor.rowcount == 0:
-                print("No se actualizó ninguna fila")
+                print("[PAUSAR] No se actualizó ninguna fila")
                 return None
 
         return get_incidencia_by_id(incidencia_id)
@@ -413,6 +421,7 @@ def pausar_incidencia(incidencia_id: int, fecha_hora_pausa):
         print(f"Error al pausar incidencia: {e}")
         print(f"Traceback completo: {traceback.format_exc()}")
         return None
+
 
 def calcular_horas_totales(incidencia, fecha_hora_pausa):
     if not incidencia or not fecha_hora_pausa:
@@ -487,25 +496,20 @@ def reanudar_incidencia(incidencia_id: int):
         if incidencia.estado != 'en_reparacion':
             print("Solo se puede reanudar una incidencia en reparación.")
             return None
-        # Verificar si la incidencia ya está pausada
-        if incidencia.pausada:
-            print("La incidencia ya está pausada.")
-            return None
         if not incidencia.pausada:
             print("La incidencia no está pausada.")
             return None
 
-        now = datetime.now()  # o datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         with get_cursor() as cursor:
-            # Solo cambia pausada, fecha_hora_pausa y fecha_ultimo_reinicio
             sql = """
-                  UPDATE incidencias
-                  SET pausada = FALSE,
-                      fecha_hora_pausa = NULL,
-                      fecha_ultimo_reinicio = %s
-                  WHERE id = %s
-                  """
+                UPDATE incidencias
+                SET pausada = FALSE,
+                    fecha_hora_pausa = NULL,
+                    fecha_ultimo_reinicio = %s
+                WHERE id = %s
+            """
             cursor.execute(sql, (now.strftime('%Y-%m-%d %H:%M:%S'), incidencia_id))
             if cursor.rowcount == 0:
                 return None
@@ -514,7 +518,6 @@ def reanudar_incidencia(incidencia_id: int):
     except Exception as e:
         print(f"Error al reanudar incidencia: {e}")
         return None
-
 
 ############################ FILTROS ###########################
 def filtrar_incidencias_handler(estado, tipo, tecnico_id, cliente_id):
