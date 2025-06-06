@@ -1,5 +1,5 @@
 from pydantic import BaseModel, field_validator
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 
 class FacturaBase(BaseModel):
@@ -37,22 +37,42 @@ class FacturaBase(BaseModel):
             raise ValueError('La cantidad adicional debe ser positiva')
         return v
 
-class FacturaCreate(FacturaBase):
-    pass
+class ProductoEnFactura(BaseModel):
+    producto_id: int
+    cantidad: int
 
-class FacturaUpdate(BaseModel):
+
+class FacturaCreate(BaseModel):
     fecha_emision: Optional[datetime] = None
     tiempo_total: Optional[float] = None
     cantidad_total: Optional[float] = None
     cantidad_adicional: Optional[float] = None
+    IVA: Optional[float] = 0.0
+    observaciones: Optional[str] = None
+    tecnico_id: int
+    cliente_id: int
+    incidencia_id: int
+    productos: Optional[List[ProductoEnFactura]] = None
+
+class FacturaUpdate(BaseModel):
+    cantidad_total: Optional[float] = None
+    cantidad_adicional: Optional[float] = None
     IVA: Optional[float] = None
     observaciones: Optional[str] = None
-    tecnico_id: Optional[int] = None
-    cliente_id: Optional[int] = None
-    incidencia_id: Optional[int] = None
+
+class ProductoFactura(BaseModel):
+    id: int
+    nombre: str
+    precio_unitario: float
+    cantidad: int
 
 class FacturaDB(FacturaBase):
     numero_factura: int
+    productos: Optional[List[ProductoFactura]] = []
+
+
+class FacturaConIncidencia(FacturaDB):
+    incidencia_nombre: Optional[str] = None
 
     class Config:
         orm_mode = True

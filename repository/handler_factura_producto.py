@@ -2,7 +2,7 @@ import pymysql
 from models.factura_producto import FacturaProductoDB
 from repository.conexion import get_cursor
 
-def insertar_factura_producto(factura_producto):
+def insertar_factura_producto(facturaproducto):
     """
     Inserta una relación producto-factura con la cantidad usada.
     Devuelve el id insertado o None si hay error.
@@ -10,13 +10,13 @@ def insertar_factura_producto(factura_producto):
     try:
         with get_cursor() as cursor:
             sql = """
-                INSERT INTO factura_producto (factura_id, producto_id, cantidad)
+                INSERT INTO facturaproducto (factura_id, producto_id, cantidad)
                 VALUES (%s, %s, %s)
             """
             valores = (
-                factura_producto["factura_id"],
-                factura_producto["producto_id"],
-                factura_producto["cantidad"]
+                facturaproducto["factura_id"],
+                facturaproducto["producto_id"],
+                facturaproducto["cantidad"]
             )
             cursor.execute(sql, valores)
             return cursor.lastrowid
@@ -27,7 +27,7 @@ def insertar_factura_producto(factura_producto):
 def get_factura_producto_by_id(id_relacion):
     try:
         with get_cursor() as cursor:
-            sql = "SELECT * FROM factura_producto WHERE id = %s"
+            sql = "SELECT * FROM facturaproducto WHERE id = %s"
             cursor.execute(sql, (id_relacion,))
             row = cursor.fetchone()
             return FacturaProductoDB(**row) if row else None
@@ -38,7 +38,7 @@ def get_factura_producto_by_id(id_relacion):
 def get_productos_de_factura(factura_id: int):
     try:
         with get_cursor() as cursor:
-            sql = "SELECT * FROM factura_producto WHERE factura_id = %s"
+            sql = "SELECT * FROM facturaproducto WHERE factura_id = %s"
             cursor.execute(sql, (factura_id,))
             productos = cursor.fetchall()
             return [FacturaProductoDB(**p) for p in productos]
@@ -51,7 +51,7 @@ def actualizar_factura_producto(id_relacion: int, cantidad: int):
         return False
     try:
         with get_cursor() as cursor:
-            sql = "UPDATE factura_producto SET cantidad = %s WHERE id = %s"
+            sql = "UPDATE facturaproducto SET cantidad = %s WHERE id = %s"
             cursor.execute(sql, (cantidad, id_relacion))
             return cursor.rowcount > 0
     except Exception as e:
@@ -62,7 +62,7 @@ def actualizar_factura_producto(id_relacion: int, cantidad: int):
 def eliminar_factura_producto(id_relacion: int):
     try:
         with get_cursor() as cursor:
-            sql = "DELETE FROM factura_producto WHERE id = %s"
+            sql = "DELETE FROM facturaproducto WHERE id = %s"
             cursor.execute(sql, (id_relacion,))
             return cursor.rowcount > 0
     except pymysql.MySQLError as e:

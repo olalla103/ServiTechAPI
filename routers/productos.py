@@ -23,6 +23,7 @@ def crear_producto(datos: ProductoCreate):
 # Listar todos los productos
 @router.get("/", response_model=List[ProductoDB])
 def listar_productos():
+    print("Listando productos")
     return get_all_productos()
 
 # Obtener producto por id

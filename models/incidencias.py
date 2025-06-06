@@ -61,6 +61,16 @@ class IncidenciaBase(BaseModel):
                 raise ValueError('La fecha/hora de pausa debe estar entre la fecha de inicio y la de finalización')
         return v
 
+    @field_validator('fecha_final')
+    def fecha_final_no_anterior(cls, v, info):
+        # Solo validar si fecha_inicio está presente y no permitir romper la API
+        fecha_inicio = info.data.get('fecha_inicio')
+        if v and fecha_inicio and v < fecha_inicio:
+            # Solo da un warning, no un error
+            print("AVISO: fecha_final anterior a fecha_inicio en incidencia id:", info.data.get('id'))
+            return v
+        return v
+
 class IncidenciaCreate(IncidenciaBase):
     pass
 
@@ -77,7 +87,7 @@ class IncidenciaUpdate(BaseModel):
     fecha_inicio: Optional[datetime] = None
     fecha_final: Optional[datetime] = None
     fecha_hora_pausa: Optional[datetime] = None
-    # Puedes añadir más campos si los vas a actualizar desde el front
+
 
 class IncidenciaDB(IncidenciaBase):
     id: int

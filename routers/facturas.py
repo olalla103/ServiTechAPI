@@ -2,15 +2,18 @@ from fastapi import APIRouter, HTTPException
 from typing import List
 
 from models.factura_producto import FacturaProductoDB, FacturaProductoCreate
-from models.facturas import FacturaDB, FacturaCreate, FacturaUpdate
+from models.facturas import FacturaDB, FacturaCreate, FacturaUpdate, FacturaConIncidencia
 from repository.handler_factura import (
     get_all_facturas,
     get_factura_by_id,
     insertar_factura,
     actualizar_factura,
-    eliminar_factura, actualizar_cantidad_adicional_en_factura,
+    eliminar_factura, actualizar_cantidad_adicional_en_factura, get_facturas_por_tecnico, get_facturas_por_incidencia,
+    get_facturas_resueltas_por_tecnico,
 )
 from repository.handler_factura_producto import insertar_factura_producto
+from repository.handler_incidencia import get_incidencia_by_id
+from repository.handler_producto import get_producto_by_id
 
 router = APIRouter()
 
@@ -38,6 +41,18 @@ def obtener_factura(numero_factura: int):
         raise HTTPException(status_code=404, detail="Factura no encontrada")
     return factura
 
+@router.get("/incidencia/{incidencia_id}", response_model=List[FacturaConIncidencia])
+def listar_facturas_por_incidencia(incidencia_id: int):
+    """
+    Devuelve todas las facturas asociadas a una incidencia específica.
+    """
+    return get_facturas_por_incidencia(incidencia_id)
+
+
+@router.get("/tecnico/{tecnico_id}", response_model=List[FacturaConIncidencia])
+def listar_facturas_tecnico(tecnico_id: int):
+    return get_facturas_por_tecnico(tecnico_id)
+
 # =========================
 # === CREACIÓN (POST) =====
 # =========================
@@ -46,14 +61,35 @@ def obtener_factura(numero_factura: int):
 @router.post("/", response_model=FacturaDB)
 def crear_factura(datos: FacturaCreate):
     """
-    Crea una factura a partir de los datos proporcionados en el body.
-    Devuelve la factura recién creada.
-    Lanza 400 si hay error de inserción.
+    Crea una factura con sus productos asociados.
+    Calcula y actualiza automáticamente la cantidad adicional.
     """
-    nueva_id = insertar_factura(datos.model_dump())
+    # 1. Insertar la factura principal (sin cantidad_adicional)
+    nueva_id = insertar_factura(datos.model_dump(exclude={'productos'}))  # NO envíes 'productos'
     if not nueva_id:
         raise HTTPException(status_code=400, detail="No se pudo crear la factura")
+
+    # 2. Insertar los productos, si llegan
+    if datos.productos:
+        for prod in datos.productos:
+            insertar_factura_producto({
+                "factura_id": nueva_id,
+                "producto_id": prod.producto_id,
+                "cantidad": prod.cantidad
+            })
+        # 3. Recalcular la cantidad adicional
+        actualizar_cantidad_adicional_en_factura(nueva_id)
+
+    # 4. Devuelve la factura completa (ya con cantidad_adicional recalculada)
     return get_factura_by_id(nueva_id)
+
+@router.get("/resueltas/tecnico/{tecnico_id}", response_model=List[FacturaConIncidencia])
+def listar_facturas_resueltas_tecnico(tecnico_id: int):
+    """
+    Devuelve todas las facturas de incidencias resueltas asociadas a un técnico.
+    """
+    return get_facturas_resueltas_por_tecnico(tecnico_id)
+
 
 # ==============================
 # === EDICIÓN (PATCH) ==========
@@ -90,15 +126,36 @@ def borrar_factura(numero_factura: int):
     return {"ok": True}
 
 
-def get_factura_producto_by_id(nueva_id):
-    pass
+from datetime import datetime
 
+@router.post("/facturas", response_model=FacturaDB)
+def crear_factura(factura: FacturaCreate):
+    # 1. Obtener el tiempo de la incidencia
+    incidencia = get_incidencia_by_id(factura.incidencia_id)
+    tiempo_total = incidencia.tiempo if incidencia else 0
 
-@router.post("/", response_model=FacturaProductoDB)
-def crear_factura_producto(datos: FacturaProductoCreate):
-    nueva_id = insertar_factura_producto(datos.model_dump())
-    if not nueva_id:
-        raise HTTPException(status_code=400, detail="No se pudo añadir el producto a la factura")
-    # Calcula y actualiza la cantidad adicional de la factura
-    actualizar_cantidad_adicional_en_factura(datos.factura_id)
-    return get_factura_producto_by_id(nueva_id)
+    # 2. Calcular cantidad_adicional (productos)
+    cantidad_adicional = 0
+    if factura.productos:
+        for prod in factura.productos:
+            producto = get_producto_by_id(prod.producto_id)
+            cantidad_adicional += producto.precio * prod.cantidad
+
+    # 3. IVA fijo a 21
+    iva = 21.0
+
+    # 4. Calcular cantidad_total
+    base = tiempo_total * 20  # 20€ la hora
+    cantidad_total = base + cantidad_adicional + ((base + cantidad_adicional) * (iva / 100))
+
+    # 5. Guardar la factura
+    factura_dict = factura.model_dump()
+    factura_dict["fecha_emision"] = factura_dict.get("fecha_emision") or datetime.now()
+    factura_dict["tiempo_total"] = tiempo_total
+    factura_dict["cantidad_adicional"] = cantidad_adicional
+    factura_dict["IVA"] = iva
+    factura_dict["cantidad_total"] = cantidad_total
+
+    nueva_id = insertar_factura(factura_dict)
+    return get_factura_by_id(nueva_id)
+

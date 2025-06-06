@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, Query
 from typing import Any, List
 
+from models.facturas import FacturaDB
 from models.incidencias import (
     FinalizarIncidenciaInput,
     IncidenciaCreate,
@@ -8,6 +9,7 @@ from models.incidencias import (
     IncidenciaUpdate,
     PausaIncidencia,
 )
+from repository.handler_factura import get_factura_by_tecnico_and_incidencia
 from repository.handler_incidencia import (
     filtrar_incidencias_handler,
     finalizar_incidencia,
@@ -118,6 +120,10 @@ def endpoint_pausar_incidencia(incidencia_id: int, datos: PausaIncidencia):
     if not incidencia_modificada:
         raise HTTPException(status_code=404, detail="Incidencia no encontrada o no se pudo pausar")
     return incidencia_modificada
+
+@router.get("/tecnico/{tecnico_id}/incidencia/{incidencia_id}", response_model=FacturaDB)
+def get_factura_tecnico_incidencia(tecnico_id: int, incidencia_id: int):
+    return get_factura_by_tecnico_and_incidencia(tecnico_id, incidencia_id)
 
 
 @router.patch("/reanudar/{incidencia_id}", response_model=IncidenciaDB)
