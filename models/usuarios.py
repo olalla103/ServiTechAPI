@@ -71,6 +71,7 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
 
+
 class CredencialesLogin(BaseModel):
     email: str
     contraseña: str

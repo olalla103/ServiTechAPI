@@ -2,9 +2,7 @@ from fastapi import Request, Query
 
 from fastapi import APIRouter, HTTPException
 from typing import List, Optional
-from models.usuarios import UsuarioDB, UsuarioCreate, UsuarioUpdate, TokenResponse
-from repository.handler_incidencia import get_incidencia_by_tecnico_id_en_reparacion, \
-    get_incidencia_by_tecnico_id_pendiente, get_incidencia_by_tecnico_id_resuelta
+from models.usuarios import UsuarioDB, UsuarioCreate, UsuarioUpdate, CredencialesLogin
 from repository.handler_usuario import (
     get_all_usuarios,
     get_usuario_by_id,
@@ -17,6 +15,7 @@ from repository.handler_usuario import (
     get_usuarios_ordenados_por_columna,
     actualizar_usuario,
     get_usuario_by_email, get_clientes_by_empresa_id, get_cliente_by_id, get_usuario_id_by_email,
+    get_tecnico_by_empresa_id, actualizar_contraseña_usuario,
 )
 from pydantic import BaseModel
 from jose import jwt
@@ -25,6 +24,9 @@ from datetime import datetime, timedelta
 SECRET_KEY = "SUPERSECRETO_CAMBIALO123"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 1 semana
+
+
+
 
 router = APIRouter()
 
@@ -44,6 +46,13 @@ def clientes_empresa(empresa_id: str):
     Devuelve todos los clientes de una empresa según el criterio explicado.
     """
     return get_clientes_by_empresa_id(empresa_id)
+
+@router.get("/tecnico/empresa/{empresa_id}", response_model=List[dict])
+def clientes_empresa(empresa_id: str):
+    """
+    Devuelve todos los tecnico de una empresa según el criterio explicado.
+    """
+    return get_tecnico_by_empresa_id(empresa_id)
 
 @router.get("/clientes/{cliente_id}", response_model=dict)
 def cliente_detalle(cliente_id: int):
@@ -117,20 +126,62 @@ def endpoint_recuperar_especialidad(usuario_id: int):
 # --- CREACIÓN, EDICIÓN Y VERIFICACIÓN ---
 
 # Insertar un usuario
-@router.post("", response_model=UsuarioDB)
+from fastapi_mail import FastMail, MessageSchema, ConnectionConfig
+
+conf = ConnectionConfig(
+    MAIL_USERNAME = "olallalnc@gmail.com",
+    MAIL_PASSWORD = "xcolnxqlqftnjslh",
+    MAIL_FROM = "olallalnc@gmail.com",
+    MAIL_PORT = 587,
+    MAIL_SERVER = "smtp.gmail.com",
+    MAIL_STARTTLS = True,
+    MAIL_SSL_TLS = False,
+    USE_CREDENTIALS = True,
+    VALIDATE_CERTS = True
+)
+
 @router.post("/", response_model=UsuarioDB)
-def crear_usuario(usuario: UsuarioCreate):
+async def crear_usuario(usuario: UsuarioCreate):
     print("JSON recibido del frontend usuario:", usuario)
     nueva_id = insertar_usuario(usuario.model_dump())
     if not nueva_id:
         raise HTTPException(status_code=400, detail="No se pudo crear el usuario")
-    return get_usuario_by_id(nueva_id)
 
-@router.post("/debug", response_model=None)
-async def debug_usuario(request: Request):
-    body = await request.json()
-    print("JSON recibido del frontend:", body)
-    return {"ok": True}
+    # -- Cuerpo HTML del email --
+    html = f"""
+    <div style="font-family: Arial, sans-serif; background: #f8fafc; padding: 40px;">
+        <div style="background: #fff; border-radius: 18px; box-shadow: 0 2px 12px #2edbd1aa; max-width: 480px; margin: auto; padding: 30px;">
+            <h2 style="color: #2edbd1; text-align: center; margin-bottom: 16px;">Bienvenido/a a <span style="color:#222;">ServiTech</span> 👋</h2>
+            <p style="font-size: 16px; color: #222;">¡Hola <b>{usuario.nombre}</b>!</p>
+            <p style="font-size: 16px; color: #222;">Gracias por registrarte en <b>ServiTech</b>.</p>
+            <hr style="border:none;border-top:1px solid #e0e0e0; margin:24px 0;">
+            <p style="font-size: 16px; color: #222; margin-bottom:6px;">Estos son tus datos de acceso:</p>
+            <ul style="font-size: 16px; color: #2edbd1; margin-top: 0;">
+                <li><b>Correo electrónico:</b> <span style="color:#222;">{usuario.email}</span></li>
+                <li><b>Contraseña:</b> <span style="color:#222;">{usuario.contraseña}</span></li>
+            </ul>
+            <p style="font-size: 15px; color: #777; margin-top:30px;">Te recomendamos cambiar la contraseña tras tu primer inicio de sesión.
+            <br>
+            Recuerda que la contraseña debe tener al menos 8 caracteres.
+            </p>
+            <div style="text-align:center; margin-top:20px;">
+                <span style="font-size:13px; color:#aaa;">ServiTech &copy; {2025}</span>
+            </div>
+        </div>
+    </div>
+    """
+
+    message = MessageSchema(
+        subject="¡Bienvenido/a a ServiTech!",
+        recipients=[usuario.email],
+        body=html,
+        subtype="html"
+    )
+
+    fm = FastMail(conf)
+    await fm.send_message(message)
+
+    return get_usuario_by_id(nueva_id)
 
 
 # Cambiar teléfono del usuario
@@ -197,6 +248,12 @@ def endpoint_verificar_credenciales(datos: LoginRequest):
         "user": usuario
     }
 
+@router.post("/cambiar_password")
+async def cambiar_password(data: CredencialesLogin):
+    actualizado = actualizar_contraseña_usuario(data.email, data.contraseña)
+    if not actualizado:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    return {"msg": "Contraseña actualizada correctamente"}
 
 
 # --- ELIMINACIÓN ---

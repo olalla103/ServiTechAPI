@@ -92,6 +92,8 @@ def obtener_incidencia(incidencia_id: int):
 
 @router.post("/", response_model=IncidenciaDB)
 def crear_incidencia(datos: IncidenciaCreate):
+    print(datos)  # O mejor aún:
+    print(datos.model_dump())
     nueva_id = insertar_incidencia(datos.model_dump())
     if not nueva_id:
         raise HTTPException(status_code=400, detail="No se pudo crear la incidencia")

@@ -263,6 +263,25 @@ def get_clientes_by_empresa_id(empresa_id: str):
         print(f"Error al obtener clientes por empresa: {e}")
         return []
 
+def get_tecnico_by_empresa_id(empresa_id: str):
+    try:
+        with get_cursor() as cursor:
+            sql = """
+            SELECT id, nombre, apellido1, apellido2, email, telefono
+            FROM usuarios
+            WHERE
+            (numero_seguridad_social IS NOT NULL AND numero_seguridad_social != '')
+            AND (especialidad IS NOT NULL OR especialidad != '')
+            AND (admin_empresa IS NOT NULL OR admin_empresa != 0)
+            AND empresa_id = %s;
+                """
+            cursor.execute(sql, (empresa_id,))
+            clientes = cursor.fetchall()
+            return clientes
+    except Exception as e:
+        print(f"Error al obtener clientes por empresa: {e}")
+        return []
+
 def get_cliente_by_id(cliente_id: int):
     try:
         with get_cursor() as cursor:
@@ -319,3 +338,13 @@ def get_usuario_id_by_email(email: str):
     except pymysql.MySQLError as e:
         print(f"Error al recuperar ID de usuario por email: {e}")
         return None
+
+def actualizar_contraseña_usuario(email, nueva_contraseña):
+    try:
+        with get_cursor() as cursor:
+            sql = "UPDATE usuarios SET contraseña = %s WHERE email = %s"
+            cursor.execute(sql, (nueva_contraseña, email))
+            return cursor.rowcount > 0
+    except Exception as e:
+        print("Error actualizando contraseña:", e)
+        return False
